@@ -4,6 +4,7 @@ const API_URL = "http://localhost:8000";
 
 export default function App() {
   const [grid, setGrid] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     fetchGrid();
@@ -13,6 +14,7 @@ export default function App() {
     const res = await fetch(`${API_URL}/grid`);
     const data = await res.json();
     setGrid(data);
+    setErrorMessage(""); // Clear any previous error message
   };
 
   const moveRobot = async (direction) => {
@@ -29,22 +31,29 @@ export default function App() {
   };
 
   const placeCircle = async () => {
-    await fetch(`${API_URL}/place`, { method: "POST" });
-    console.log("Hello World");
-    fetchGrid();
+    try {
+      const res = await fetch(`${API_URL}/place`, { method: "POST" });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || "An error occurred");
+      }
+      fetchGrid();
+    } catch (error) {
+      setErrorMessage(error.message);
+    }
   };
 
   const downloadHistory = async () => {
     const res = await fetch(`${API_URL}/history`);
-    const text = await res.text();
-    const blob = new Blob([text], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "movement_history.csv";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "movement-history.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
   };
 
   const gridSize = 3;
@@ -62,11 +71,10 @@ export default function App() {
         bgColor = "bg-blue-500";
       }
     }
-    console.log("x", x, "y", y, "isRobot", isRobot, "circle", circle);
     return (
       <div
         key={`${x}-${y}`}
-        className={`w-32 h-32 border flex items-center justify-center ${bgColor}`}
+        className={`w-32 h-32 border flex items-center justify-center ${bgColor} rounded-full`}
       >
         {isRobot ?  "🤖" : ""}
       </div>
@@ -88,12 +96,26 @@ export default function App() {
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-1 border border-gray-400 mb-4">
+      <div className="text-center text-red-500 font-bold mb-4 text-2xl">
+        The Robot is currently at: {grid?.robot[0]}, {grid?.robot[1]}
+        {
+          // if the robot is holding a circle, display what color it is
+          // otherwise, display, the robot is not holding anything
+          grid?.held_circle ? ` and holding a ${grid?.held_circle} circle` : " and not holding anything"
+        }
+      </div>
+
+      {errorMessage && (
+        <div className="text-center bg-red-100 text-red-500 p-2 mb-4">{errorMessage}</div>
+      )}
+
+      <div className="grid grid-cols-3 gap-1 mb-4"
+      style={{paddingLeft: "17rem"}}>
         {Array.from({ length: gridSize }).map((_, y) =>
           Array.from({ length: gridSize }).map((_, x) => renderCell(x, y))
         )}
       </div>
-      <div className="flex gap-2">
+      <div className="grid grid-cols-3 gap-2 mb-4">
         <button
           onClick={pickUpCircle}
           className="p-2 bg-yellow-500 text-white rounded"
